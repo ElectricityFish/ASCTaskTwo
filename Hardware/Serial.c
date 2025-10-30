@@ -4,6 +4,8 @@
 
 uint8_t Serial_RxData;		//定义串口接收的数据变量
 uint8_t Serial_RxFlag;		//定义串口接收的标志位变量
+char Serial_Rxpacket[100];//接收缓存区.
+
 
 /**
   * 函    数：串口初始化
@@ -186,14 +188,48 @@ uint8_t Serial_GetRxData(void)
   *           函数名为预留的指定名称，可以从启动文件复制
   *           请确保函数名正确，不能有任何差异，否则中断函数将不能进入
   */
-void USART1_IRQHandler(void)
+void USART1_IRQHandler (void)
 {
-	if (USART_GetITStatus(USART1, USART_IT_RXNE) == SET)		//判断是否是USART1的接收事件触发的中断
+	static uint8_t RxState=0;//标志接收状态
+	static uint8_t pRxPacket=0;//指示接收到第几个数据了
+	if(USART_GetITStatus (USART1 ,USART_IT_RXNE )==SET)//判断标志位
 	{
-		Serial_RxData = USART_ReceiveData(USART1);				//读取数据寄存器，存放在接收的数据变量
-		Serial_RxFlag = 1;										//置接收标志位变量为1
-		USART_ClearITPendingBit(USART1, USART_IT_RXNE);			//清除USART1的RXNE标志位
-																//读取数据寄存器会自动清除此标志位
-																//如果已经读取了数据寄存器，也可以不执行此代码
+		uint8_t RxData=USART_ReceiveData (USART1);
+		
+		
+		if(RxState ==0)//进入等待包头的程序
+		{
+			if(RxData=='@'&&Serial_RxFlag ==0) RxState =1;//Serial_RxFlag ==0是为了防止数据错位
+				
+		}else if(RxState ==1){//进入接收数据的程序
+			if(RxData =='\r'){
+				RxState =2;
+			}else{
+				Serial_Rxpacket[pRxPacket ]=RxData;
+				pRxPacket++;
+			}
+		}else if(RxState ==2){//进入等待包尾的程序
+			if(RxData =='\n')//等待第二个包尾
+			{
+				RxState =0;
+				Serial_Rxpacket[pRxPacket ]='\0';//添加结束符
+				Serial_RxFlag =1;//标志数据接收完成
+				pRxPacket=0;
+			}
+		}
+		
+		
+		USART_ClearITPendingBit (USART1 ,USART_IT_RXNE);//清除标志位
 	}
 }
+//void USART1_IRQHandler(void)
+//{
+//	if (USART_GetITStatus(USART1, USART_IT_RXNE) == SET)		//判断是否是USART1的接收事件触发的中断
+//	{
+//		Serial_RxData = USART_ReceiveData(USART1);				//读取数据寄存器，存放在接收的数据变量
+//		Serial_RxFlag = 1;										//置接收标志位变量为1
+//		USART_ClearITPendingBit(USART1, USART_IT_RXNE);			//清除USART1的RXNE标志位
+//																//读取数据寄存器会自动清除此标志位
+//																//如果已经读取了数据寄存器，也可以不执行此代码
+//	}
+//}
